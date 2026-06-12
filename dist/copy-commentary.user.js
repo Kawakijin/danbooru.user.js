@@ -1,12 +1,12 @@
 // ==UserScript==
 // @name         Danbooru - Copy Commentary
 // @author       hdk5
-// @version      20251104123049
+// @version      20260525203715
 // @namespace    https://github.com/hdk5/danbooru.user.js
 // @homepageURL  https://github.com/hdk5/danbooru.user.js
 // @supportURL   https://github.com/hdk5/danbooru.user.js/issues
 // @downloadURL  https://github.com/hdk5/danbooru.user.js/raw/master/dist/copy-commentary.user.js
-// @updateURL    https://github.com/hdk5/danbooru.user.js/raw/master/dist/copy-commentary.user.js
+// 
 // @match        *://*.donmai.us/*
 // @grant        GM_addStyle
 // ==/UserScript==
@@ -18,15 +18,40 @@
 
 /* eslint-disable no-use-before-define */
 
+const TAG_SCRIPT_SHORTCUTS = [
+  'paid_reward_available',
+  'english_commentary',
+  'korean_commentary',
+  'chinese_commentary',
+  'mixed-language_commentary',
+  'bilingual_commentary',
+];
+
 const CSS = `
   .copy-commentary summary {
     font-weight: bold;
   }
 
-  .copy-commentary-query {
-    display: flex;
+  .copy-commentary-query, .copy-commentary-tag-script {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    column-gap: 0.5rem;
     align-items: center;
-    gap: 0.5rem;
+  }
+
+  .copy-commentary-shortcuts, .copy-commentary-tag-script-shortcuts {
+    grid-column: 2 / 3;
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: 0.5rem;
+  }
+
+  .copy-commentary-query:has(button[disabled]) {
+    cursor: wait;
+  }
+
+  .copy-commentary-query:has(button[disabled]) * {
+    pointer-events: none;
   }
 
   .copy-commentary-status-pending,
@@ -64,21 +89,26 @@ const CSS = `
   }
 
   .copy-commentary-col-status,
-  .copy-commentary-cell-status {
+  .copy-commentary-cell-status,
+  .copy-commentary-col-tag-script-status,
+  .copy-commentary-cell-tag-script-status {
     min-width: 1rem;
     white-space: nowrap;
+    text-align: center;
   }
 
   .copy-commentary-results-table:has(tbody:empty) {
     display: none;
   }
 
-  .copy-commentary-results-table:has(tbody:empty) + .copy-commentary-submit-button {
+  .copy-commentary-actions:has(.copy-commentary-results-table tbody:empty) {
     display: none;
   }
 
-  .copy-commentary-submit-button {
-    display: block;
+  .copy-commentary-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
   }
 `;
 
@@ -90,7 +120,62 @@ setTimeout(() => {
 
   GM_addStyle(CSS);
 
-  const $copyCommentaryDetails = $('<details>', { class: 'copy-commentary' });
+  const postId = $('body').data('post-id');
+
+  const $shortcutsWrapper = $('<div>', { class: 'copy-commentary-shortcuts' });
+  let defaultQuery = `id:${postId}`;
+
+  const hasChildren = $('body').data('post-has-children');
+  if (hasChildren) {
+    const childrenQuery = `parent:${postId}`;
+    defaultQuery = childrenQuery;
+    const $childrenShortcut = $('<a>', {
+      href: '#',
+      text: 'Children',
+      class: 'text-xs mr-2',
+      click: ev => onClickShortcut(ev, childrenQuery),
+    });
+    $shortcutsWrapper.append($childrenShortcut);
+  }
+
+  const parentId = $('body').data('post-parent-id');
+  if (parentId) {
+    const parentQuery = `parent:${parentId}`;
+    if (!hasChildren) {
+      defaultQuery = parentQuery;
+    }
+    const $parentShortcut = $('<a>', {
+      href: '#',
+      text: 'Siblings',
+      class: 'text-xs mr-2',
+      click: ev => onClickShortcut(ev, parentQuery),
+    });
+    $shortcutsWrapper.append($parentShortcut);
+  }
+
+  const pixivId = $('body').data('post-pixiv-id');
+  if (pixivId) {
+    const pixivQuery = `pixiv_id:${pixivId}`;
+    const $pixivShortcut = $('<a>', {
+      href: '#',
+      text: 'Pixiv',
+      class: 'text-xs mr-2',
+      click: ev => onClickShortcut(ev, pixivQuery),
+    });
+    $shortcutsWrapper.append($pixivShortcut);
+  }
+
+  const source = $('#post-info-source a:last').attr('href');
+  const sourceQuery = `source:"${source}"`;
+  const $sourceShortcut = $('<a>', {
+    href: '#',
+    text: 'Source',
+    class: 'text-xs mr-2',
+    click: ev => onClickShortcut(ev, sourceQuery),
+  });
+  $shortcutsWrapper.append($sourceShortcut);
+
+  const $copyCommentaryDetails = $('<div>', { class: 'copy-commentary' });
 
   const $queryWrapper = $('<div>', { class: 'copy-commentary-query' });
   const $queryLabel = $('<label>', {
@@ -100,14 +185,14 @@ setTimeout(() => {
   const $queryInput = $('<input>', {
     type: 'text',
     id: 'copy-commentary-query-input',
-    value: `parent:${$('body').attr('data-post-id')}`,
+    value: defaultQuery,
   });
   const $fetchButton = $('<button>', {
     type: 'button',
     text: 'Fetch',
     click: () => fetchPosts(),
   });
-  $queryWrapper.append($queryLabel, $queryInput, $fetchButton);
+  $queryWrapper.append($queryLabel, $queryInput, $fetchButton, $shortcutsWrapper);
 
   const $resultsTable = $('<table>', { class: 'copy-commentary-results-table' });
   const $resultsThead = $('<thead>');
@@ -119,7 +204,8 @@ setTimeout(() => {
   $headerRow.append(
     $('<th>', { class: 'copy-commentary-col-select' }).append($selectAllCheckbox),
     $('<th>', { class: 'copy-commentary-col-id', text: 'ID' }),
-    $('<th>', { class: 'copy-commentary-col-status', text: 'Status' }),
+    $('<th>', { class: 'copy-commentary-col-status', text: 'Commentary' }),
+    $('<th>', { class: 'copy-commentary-col-tag-script-status', text: 'Tag Script' }),
   );
 
   $selectAllCheckbox.on('change', () => {
@@ -131,14 +217,53 @@ setTimeout(() => {
   });
 
   const $submitButton = $('<button>', {
-    text: 'Apply',
+    text: 'Apply Commentary',
     class: 'copy-commentary-submit-button',
     click: () => submitCommentary(),
   });
 
+  const $tagScriptWrapper = $('<div>', { class: 'copy-commentary-tag-script' });
+  const $tagScriptLabel = $('<label>', {
+    for: 'copy-commentary-tag-script-input',
+    text: 'Tag Script:',
+  });
+  const $tagScriptInput = $('<input>', {
+    type: 'text',
+    id: 'copy-commentary-tag-script-input',
+  });
+  const $tagScriptSubmitButton = $('<button>', {
+    text: 'Apply Tags',
+    class: 'copy-commentary-tag-script-submit-button',
+    click: () => submitTagScript(),
+  });
+  const $tagScriptShortcutsWrapper = $('<div>', { class: 'copy-commentary-tag-script-shortcuts' });
+
+  for (const tag of TAG_SCRIPT_SHORTCUTS) {
+    const $shortcut = $('<a>', {
+      href: '#',
+      text: tag,
+      class: 'text-xs mr-2',
+      click: ev => onClickTagScriptShortcut(ev, tag),
+    });
+    $tagScriptShortcutsWrapper.append($shortcut);
+  }
+
+  $tagScriptWrapper.append(
+    $tagScriptLabel,
+    $tagScriptInput,
+    $tagScriptSubmitButton,
+    $tagScriptShortcutsWrapper,
+  );
+
+  const $actionsWrapper = $('<div>', { class: 'copy-commentary-actions' });
+  $actionsWrapper.append($resultsTable, $submitButton, $tagScriptWrapper);
+
   $addCommentaryDialog.append($copyCommentaryDetails);
-  $copyCommentaryDetails.append($('<summary>', { text: 'Copy Commentary' }));
-  $copyCommentaryDetails.append($queryWrapper, $resultsTable, $submitButton);
+  $copyCommentaryDetails.append($('<h2>', { text: 'Copy Commentary' }));
+  $copyCommentaryDetails.append(
+    $queryWrapper,
+    $actionsWrapper,
+  );
 
   const fetchPosts = async () => {
     try {
@@ -176,7 +301,9 @@ setTimeout(() => {
 
       const $row = $('<tr>');
       const $statusCell = $('<td>', { class: 'copy-commentary-cell-status' });
+      const $tagScriptStatusCell = $('<td>', { class: 'copy-commentary-cell-tag-script-status' });
       setStatus($statusCell, 'pending');
+      setStatus($tagScriptStatusCell, 'pending');
       $row.append(
         $('<td>', { class: 'copy-commentary-cell-select' }).append($checkbox),
         $('<td>', { class: 'copy-commentary-cell-id' }).append(
@@ -187,9 +314,20 @@ setTimeout(() => {
           }),
         ),
         $statusCell,
+        $tagScriptStatusCell,
       );
       $resultsTbody.append($row);
     }
+  };
+
+  const collectInitialPostIds = () => {
+    const ids = [
+      postId,
+      $(`#has-children-relationship-preview .post-preview`).map((_, element) => $(element).data('id')).get(),
+      $(`#has-parent-relationship-preview .post-preview`).map((_, element) => $(element).data('id')).get(),
+    ];
+
+    return _(ids).flatten().compact().uniq().sort().value();
   };
 
   const submitCommentary = async () => {
@@ -209,7 +347,6 @@ setTimeout(() => {
       try {
         await $.post(`/posts/${postId}/artist_commentary/create_or_update.json`, payload);
 
-        $checkbox.prop('checked', false).trigger('change');
         setStatus($statusCell, 'success');
       }
       catch (error) {
@@ -219,6 +356,49 @@ setTimeout(() => {
     }
     updateSelectAllState();
     $submitButton.prop('disabled', false);
+  };
+
+  const submitTagScript = async () => {
+    const tagString = $tagScriptInput.val()?.trim();
+    if (!tagString) {
+      return;
+    }
+
+    $tagScriptSubmitButton.prop('disabled', true);
+    const $checkedRows = $resultsTbody.find('input[type="checkbox"]:checked');
+
+    try {
+      for (const checkbox of $checkedRows) {
+        const $checkbox = $(checkbox);
+        const $row = $checkbox.closest('tr');
+        const postId = $checkbox.data('post-id');
+        const $statusCell = $row.find('.copy-commentary-cell-tag-script-status');
+        setStatus($statusCell, 'processing');
+
+        try {
+          await $.ajax({
+            type: 'PUT',
+            url: `/posts/${postId}.json`,
+            data: {
+              post: {
+                old_tag_string: '',
+                tag_string: tagString,
+              },
+            },
+          });
+
+          setStatus($statusCell, 'success');
+        }
+        catch (error) {
+          console.error('Failed to submit tag script', postId, error);
+          setStatus($statusCell, 'error');
+        }
+      }
+    }
+    finally {
+      updateSelectAllState();
+      $tagScriptSubmitButton.prop('disabled', false);
+    }
   };
 
   const updateSelectAllState = () => {
@@ -251,4 +431,28 @@ setTimeout(() => {
       .addClass(`copy-commentary-status-${status}`)
       .text(status);
   };
+
+  const onClickShortcut = (ev, tag) => {
+    ev.preventDefault();
+    $queryInput.val(tag);
+    fetchPosts();
+  };
+
+  const onClickTagScriptShortcut = (ev, tag) => {
+    ev.preventDefault();
+
+    const tokens = $tagScriptInput.val().match(/\S+/g) || [];
+    const hasTag = tokens.some(token => token.toLowerCase() === tag.toLowerCase());
+
+    if (hasTag) {
+      $tagScriptInput.val($tagScriptInput.val().replace(new RegExp(`(?<=^|\\s)${RegExp.escape(tag)}(?=$|\\s)`, 'gi'), ''));
+    }
+    else {
+      $tagScriptInput.val(`${$tagScriptInput.val().trim()} ${tag}`.trim());
+    }
+  };
+
+  new Danbooru.Autocomplete($tagScriptInput, 'tag_query');
+  fillTable(collectInitialPostIds());
+  updateSelectAllState();
 }, 0);

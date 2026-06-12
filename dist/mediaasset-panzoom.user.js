@@ -6,6 +6,7 @@
 // @homepageURL  https://github.com/hdk5/danbooru.user.js
 // @supportURL   https://github.com/hdk5/danbooru.user.js/issues
 // @downloadURL  https://github.com/hdk5/danbooru.user.js/raw/master/dist/mediaasset-panzoom.user.js
+//
 // @match        *://*.donmai.us/*
 // @grant        none
 // @require      https://unpkg.com/panzoom@9.4.3/dist/panzoom.min.js

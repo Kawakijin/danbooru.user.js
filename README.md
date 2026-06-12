@@ -1,8 +1,6 @@
 # Notice:
 This is an older fork of hdk5's userscripts with the latest available userscripts added afterwards, if you have a newer version of any of these scripts feel free to make a PR to update this repo, the update url of these scripts has been removed.
 
-Updated scripts:
-
 ------
 
 The rest of this readme remains unchanged.
