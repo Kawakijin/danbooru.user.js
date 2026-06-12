@@ -1,8 +1,12 @@
-import antfu from '@antfu/eslint-config'
-import solid from 'eslint-plugin-solid/configs/typescript'
+import antfu from '@antfu/eslint-config';
+import solid from 'eslint-plugin-solid/configs/typescript';
 
 export default antfu(
   {
+    lessOpinionated: true,
+    stylistic: {
+      semi: true,
+    },
     typescript: {
       tsconfigPath: 'tsconfig.json',
     },
@@ -16,4 +20,4 @@ export default antfu(
     files: ['**/*.{ts,tsx}'],
     ...solid,
   },
-)
+);
