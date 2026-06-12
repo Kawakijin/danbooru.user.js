@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Danbooru - Input Tag Highlight
 // @author       hdk5
-// @version      20250724163121
+// @version      20260322143403
 // @namespace    https://github.com/hdk5/danbooru.user.js
 // @homepageURL  https://github.com/hdk5/danbooru.user.js
 // @supportURL   https://github.com/hdk5/danbooru.user.js/issues
@@ -77,7 +77,6 @@ const SCRIPT_CSS = /* CSS */`
   }
   .tag-highlight-deprecated {
     text-decoration: line-through;
-    color: var(--artist-tag-color)!important;
   }
   .tag-highlight-meta-name {
     color: var(--tag-highlight-meta-name-color);
@@ -118,7 +117,7 @@ const SCRIPT_CSS = /* CSS */`
       --tag-highlight-meta-value-color: var(--grey-2);
     }
   }
-`
+`;
 
 const RECLASS_METATAGS = {
   ch: 4,
@@ -132,7 +131,7 @@ const RECLASS_METATAGS = {
   character: 4,
   copyright: 3,
   artist: 1,
-}
+};
 const METATAGS = [
   ...Object.keys(RECLASS_METATAGS),
   'parent',
@@ -153,60 +152,85 @@ const METATAGS = [
   'disapproved',
   'status',
   '-status',
-]
-const TAG_CACHE = {}
+];
+const METATAG_NAME_REGEX = new RegExp(`^(${METATAGS.join('|')}):`, 'i');
+
+const TAG_CACHE = {};
 
 // cba to set up the bundler to use my proper parser tbh
 function tokenize(input) {
-  const tokens = []
+  const tokens = [];
 
-  let i = 0
+  let i = 0;
   while (i < input.length) {
-    const char = input[i]
+    const char = input[i];
 
     if (/\s/.test(char)) {
-      tokens.push({ type: 'whitespace', value: char })
-      i++
-      continue
+      const start = i;
+      while (i < input.length && /\s/.test(input[i])) {
+        i++;
+      }
+      tokens.push({ type: 'whitespace', value: input.slice(start, i) });
+      continue;
     }
 
-    const metaName = METATAGS.find(name => input.startsWith(`${name}:`, i))
-    if (metaName !== undefined) {
-      i += metaName.length + 1
+    const metaMatch = input.slice(i).match(METATAG_NAME_REGEX);
+    if (metaMatch !== null) {
+      const metaName = metaMatch[1];
+      i += metaName.length + 1;
 
-      let value = ''
+      let value;
 
       if (input[i] === '"' || input[i] === '\'') {
-        value += input[i++]
+        const valueStart = i;
+        const quoteChar = input[i++];
 
         while (i < input.length) {
-          value += input[i++]
-          if (input[i - 1] === value[0] && input[i - 2] !== '\\')
-            break
+          i++;
+          if (input[i - 1] === quoteChar && input[i - 2] !== '\\') {
+            break;
+          }
         }
+
+        value = input.slice(valueStart, i);
       }
       else {
-        while (i < input.length && !/\s/.test(input[i]))
-          value += input[i++]
+        const valueStart = i;
+        while (i < input.length) {
+          if (/\s/.test(input[i])) {
+            break;
+          }
+
+          if (input[i] === '\\' && i + 1 < input.length && /\s/.test(input[i + 1])) {
+            i += 2;
+            continue;
+          }
+
+          i++;
+        }
+
+        value = input.slice(valueStart, i);
       }
 
-      tokens.push({ type: 'metatag', name: metaName, value })
-      continue
+      tokens.push({ type: 'metatag', name: metaName, value });
+      continue;
     }
 
-    let tag = ''
-    while (i < input.length && !/\s/.test(input[i]))
-      tag += input[i++]
+    const tagStart = i;
+    while (i < input.length && !/\s/.test(input[i])) {
+      i++;
+    }
 
-    if (tag)
-      tokens.push({ type: 'tag', value: tag })
+    if (tagStart !== i) {
+      tokens.push({ type: 'tag', value: input.slice(tagStart, i) });
+    }
   }
 
-  return tokens
+  return tokens;
 }
 
 function normalizeTag(tag) {
-  return tag.toLowerCase()
+  return tag.toLowerCase();
 }
 
 async function fillTagCache(tokens) {
@@ -214,11 +238,11 @@ async function fillTagCache(tokens) {
   // https://github.com/danbooru/danbooru/issues/5850
   const missingTags = tokens
     .filter(token => token.type === 'tag' && !(token.value in TAG_CACHE))
-    .map(token => normalizeTag(token.value))
+    .map(token => normalizeTag(token.value));
 
-  const chunkSize = 1000
+  const chunkSize = 1000;
   for (let i = 0; i < missingTags.length; i += chunkSize) {
-    const chunk = missingTags.slice(i, i + chunkSize)
+    const chunk = missingTags.slice(i, i + chunkSize);
     const resp = await $.post('/tags.json', {
       _method: 'get',
       limit: chunkSize,
@@ -226,120 +250,137 @@ async function fillTagCache(tokens) {
       search: {
         name_array: chunk,
       },
-    })
-    const tagData = Object.fromEntries(resp.map(tag => [tag.name, tag]))
+    });
+    const tagData = Object.fromEntries(resp.map(tag => [tag.name, tag]));
     for (const tagName of chunk) {
       const tag = tagData[tagName] ?? {
         name: tagName,
         post_count: 0,
         category: 0,
         is_deprecated: false,
-      }
-      TAG_CACHE[tagName] = tag
+      };
+      TAG_CACHE[tagName] = tag;
     }
   }
 
-  return missingTags.length
+  return missingTags.length;
 }
 
 function applyHighlights(tokens) {
-  const nodes = []
+  const nodes = [];
 
   for (const token of tokens) {
-    const htmlToken = $('<span></span>')
+    const htmlToken = $('<span></span>');
     if (token.type === 'metatag') {
-      const htmlName = $('<span></span>')
-      htmlName.addClass('tag-highlight-meta-name')
-      htmlName.text(`${token.name}:`)
+      const htmlName = $('<span></span>');
+      htmlName.addClass('tag-highlight-meta-name');
+      htmlName.text(`${token.name}:`);
 
-      const htmlValue = $('<span></span>')
-      const cat = RECLASS_METATAGS[token.name]
-      if (cat !== undefined)
-        htmlToken.addClass(`tag-highlight-type-${cat}`)
-      else
-        htmlValue.addClass('tag-highlight-meta-value')
-      htmlValue.text(token.value)
+      const htmlValue = $('<span></span>');
+      const cat = RECLASS_METATAGS[token.name.toLowerCase()];
+      if (cat !== undefined) {
+        htmlToken.addClass(`tag-highlight-type-${cat}`);
+      }
+      else {
+        htmlValue.addClass('tag-highlight-meta-value');
+      }
+      htmlValue.text(token.value);
 
-      htmlToken.html([htmlName, htmlValue])
+      htmlToken.html([htmlName, htmlValue]);
     }
     else if (token.type === 'tag') {
-      htmlToken.text(token.value)
+      htmlToken.text(token.value);
       const tagData = TAG_CACHE[normalizeTag(token.value)] ?? {
         category: 0,
         post_count: 0,
         is_deprecated: false,
+      };
+      if (tagData.is_deprecated) {
+        htmlToken.addClass('tag-highlight-deprecated');
       }
-      if (tagData.is_deprecated)
-        htmlToken.addClass('tag-highlight-deprecated')
-      else if (!tagData.post_count)
-        htmlToken.addClass('tag-highlight-empty')
+      else if (!tagData.post_count) {
+        htmlToken.addClass('tag-highlight-empty');
+      }
 
-      htmlToken.addClass(`tag-highlight-type-${tagData.category}`)
+      htmlToken.addClass(`tag-highlight-type-${tagData.category}`);
     }
     else if (token.type === 'whitespace') {
-      htmlToken.text(token.value)
+      htmlToken.text(token.value);
     }
 
-    nodes.push(htmlToken)
+    nodes.push(htmlToken);
   }
 
-  return nodes
+  return nodes;
 }
 
-$('#post_tag_string').each((i, el) => {
-  GM_addStyle(SCRIPT_CSS)
+$('#post_tag_string').each((_, input_textarea) => {
+  GM_addStyle(SCRIPT_CSS);
 
-  const $input_textarea = $(el)
+  const $input_textarea = $(input_textarea);
   const $input_container = $('<div></div>', {
     class: 'tag-highlight-container',
-  })
+  });
   const $input_backdrop = $('<div></div>', {
     class: 'tag-highlight-backdrop',
     inert: '',
-  })
+  });
   const $input_highlights = $('<div></div>', {
     class: 'tag-highlight-highlights',
-  })
-  $input_container.append($input_backdrop)
-  $input_backdrop.append($input_highlights)
+  });
+  $input_container.append($input_backdrop);
+  $input_backdrop.append($input_highlights);
 
   $input_textarea.on({
-    'input': handleInput,
-    'focus': handleInput,
-    'danbooru:update-tag-counter': handleInput,
-    'scroll': handleScroll,
-  })
+    input: handleInput,
+    focus: handleInput,
+    scroll: handleScroll,
+  });
 
-  let handleInputReq
+  let handleInputReq;
   async function handleInput() {
-    const currentReq = {}
-    handleInputReq = currentReq
+    const currentReq = {};
+    handleInputReq = currentReq;
 
-    const text = $input_textarea.val()
-    const tokens = tokenize(text)
+    const text = $input_textarea.val();
+    const tokens = tokenize(text);
 
-    $input_highlights.html(applyHighlights(tokens))
-    handleScroll()
+    $input_highlights.html(applyHighlights(tokens));
+    handleScroll();
 
-    const tagsLoaded = await fillTagCache(tokens)
+    const tagsLoaded = await fillTagCache(tokens);
 
-    if (tagsLoaded === 0 || handleInputReq !== currentReq)
-      return
+    if (tagsLoaded === 0 || handleInputReq !== currentReq) {
+      return;
+    }
 
-    $input_highlights.html(applyHighlights(tokens))
+    $input_highlights.html(applyHighlights(tokens));
   }
 
   function handleScroll() {
-    const scrollTop = $input_textarea.scrollTop()
-    $input_backdrop.scrollTop(scrollTop)
+    const scrollTop = $input_textarea.scrollTop();
+    $input_backdrop.scrollTop(scrollTop);
 
-    const scrollLeft = $input_textarea.scrollLeft()
-    $input_backdrop.scrollLeft(scrollLeft)
+    const scrollLeft = $input_textarea.scrollLeft();
+    $input_backdrop.scrollLeft(scrollLeft);
   }
 
-  $input_textarea.after($input_container)
-  $input_container.append($input_textarea.detach())
+  const descriptor = Object.getOwnPropertyDescriptor(input_textarea, 'value')
+    || Object.getOwnPropertyDescriptor(Object.getPrototypeOf(input_textarea), 'value');
+  Object.defineProperty(input_textarea, 'value', {
+    get: descriptor.get,
+    set(val) {
+      descriptor.set.call(this, val);
+      handleInput();
+    },
+    configurable: descriptor.configurable,
+    enumerable: descriptor.enumerable,
+  });
 
-  if ($input_textarea.is(':visible'))
-    handleInput()
-})
+  $input_textarea.after($input_container);
+  $input_container.append($input_textarea.detach());
+
+  if ($input_textarea.is(':visible')) {
+    handleInput();
+  }
+});
