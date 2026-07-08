@@ -5,9 +5,10 @@
 // @namespace    https://github.com/hdk5/danbooru.user.js
 // @homepageURL  https://github.com/hdk5/danbooru.user.js
 // @supportURL   https://github.com/hdk5/danbooru.user.js/issues
-// @updateURL    https://github.com/hdk5/danbooru.user.js/raw/master/dist/xhs-copy-dtext.user.js
+// @updateURL    
 // @downloadURL  https://github.com/hdk5/danbooru.user.js/raw/master/dist/xhs-copy-dtext.user.js
 // @match        https://www.xiaohongshu.com/*
+// @match        https://www.rednote.com/*
 // @grant        none
 // @require      https://cdnjs.cloudflare.com/ajax/libs/jquery/3.7.1/jquery.min.js
 // @require      https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.14.1/jquery-ui.min.js
