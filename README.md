@@ -104,7 +104,7 @@ Shows webp compression info on upload/media asset page:
 - frames count per type for animations;
 - estimated quality (0-100) for lossy.
 
-[Install](/dist/estimate-jpeg-quality.user.js?raw=1)
+[Install](/dist/estimate-webp-quality.user.js?raw=1) 
 
 ### Frontpage
 
