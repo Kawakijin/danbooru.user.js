@@ -1,6 +1,35 @@
 # Notice:
-This is an older fork of hdk5's userscripts with the latest available userscripts added afterwards, if you have a newer version of any of these scripts feel free to make a PR to update this repo, the update url of these scripts has been removed.
+This is an older fork of hdk5's userscripts with the latest available userscripts added afterwards, if you have a newer version of any of these scripts or a copy of a script not in the repo then feel free to make a PR to update or add it or message / DM me to have it added, the update url of these scripts has been removed.
 
+Some scripts in the dist folder that aren't mentioned in the original read me are:
+
+### Copy Commentary
+
+[Install](copy-commentary.user.js)
+
+
+###  Expand Searchbox (conflicts and does not work with IndexedAutocomplete)
+
+[Install](expand-search-box.user.js)
+
+
+### First Upload
+
+[Install](first-upload.user.js)
+
+### Fix Pixiv Source
+
+[Install](fix-pixiv-source.user.js)
+
+
+### Fix Pixiv Source
+
+[Install](fix-pixiv-source.user.js)
+
+
+### Fix Twitter Logo
+
+[Install](fix-twitter-logo.js)
 ------
 
 The rest of this readme remains unchanged.
